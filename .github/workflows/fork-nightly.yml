@@ -1,0 +1,162 @@
+name: Fork nightly
+
+on:
+  schedule:
+    # Once a day, 04:17 in Brazil. Upstream ships nightlies far more often.
+    - cron: "17 7 * * *"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the release. Off builds and tests only.
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: fork-nightly
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: pingdotgg/t3code
+  TRAY_BRANCH: feat/minimize-to-tray
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  nightly:
+    runs-on: windows-2025
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # GitHub turns schedules off after 60 quiet days, and this repo has no regular commits.
+      - name: Keep the schedule alive
+        run: gh workflow enable fork-nightly.yml -R "$GITHUB_REPOSITORY"
+
+      - name: Find the newest upstream nightly
+        id: nightly
+        run: |
+          tag="$(gh api "repos/$UPSTREAM/releases?per_page=30" --jq '[.[] | select(.prerelease and (.draft | not) and (.tag_name | test("-nightly\\.")))][0].tag_name')"
+          [ -n "$tag" ] || { echo "No upstream nightly found." >&2; exit 1; }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "$tag is already published."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "Building $tag."
+          fi
+
+      - name: Checkout upstream nightly
+        if: steps.nightly.outputs.skip != 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.UPSTREAM }}
+          ref: ${{ steps.nightly.outputs.tag }}
+          fetch-depth: 1
+          persist-credentials: false
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout automation
+        if: steps.nightly.outputs.skip != 'true'
+        uses: actions/checkout@v6
+        with:
+          path: .fork-automation
+          persist-credentials: false
+
+      # The tray branch is one commit, so depth 2 brings the commit and its parent.
+      - name: Apply the tray commit
+        id: tray
+        if: steps.nightly.outputs.skip != 'true'
+        run: |
+          git fetch --depth=2 "https://github.com/$GITHUB_REPOSITORY.git" "$TRAY_BRANCH"
+          sha="$(git rev-parse FETCH_HEAD)"
+          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com cherry-pick "$sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Vite+
+        if: steps.nightly.outputs.skip != 'true'
+        uses: voidzero-dev/setup-vp@v1
+        env:
+          VP_DOWNLOAD_TIMEOUT: "120"
+        with:
+          node-version-file: package.json
+          cache: false
+          run-install: false
+
+      - name: Setup Rust
+        if: steps.nightly.outputs.skip != 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install dependencies
+        if: steps.nightly.outputs.skip != 'true'
+        run: |
+          vp install
+          vp run --filter "@t3tools/desktop" ensure:electron
+
+      - name: Run the tray unit tests
+        if: steps.nightly.outputs.skip != 'true'
+        working-directory: apps/desktop
+        run: vp test run src/window/CloseToTray.test.ts
+
+      - name: Build resource monitor
+        if: steps.nightly.outputs.skip != 'true'
+        run: cargo build --locked --release --manifest-path native/resource-monitor/Cargo.toml --target x86_64-pc-windows-msvc
+
+      - name: Build installer
+        if: steps.nightly.outputs.skip != 'true'
+        env:
+          T3CODE_DESKTOP_REUSE_RESOURCE_MONITOR: "true"
+          T3CODE_DESKTOP_UPDATE_REPOSITORY: ${{ github.repository }}
+          VERSION: ${{ steps.nightly.outputs.version }}
+        run: |
+          cp .env.example .env
+          node scripts/build-desktop-artifact.ts --platform win --target nsis --arch x64 --build-version "$VERSION" --output-dir release-fork --keep-stage --verbose
+
+      # Installs on this feed update themselves, so a build that fails here is never published.
+      - name: Test the packaged app
+        if: steps.nightly.outputs.skip != 'true'
+        env:
+          T3_REPO: ${{ github.workspace }}
+        run: |
+          tmp="$(node -p 'require("os").tmpdir()')"
+          exe="$(find "$tmp" -maxdepth 6 -path '*/win-unpacked/T3 Code*.exe' | head -1)"
+          [ -n "$exe" ] || { echo "Packaged app not found in $tmp." >&2; exit 1; }
+          mkdir -p "$RUNNER_TEMP/shots"
+          node .fork-automation/.github/scripts/tray-e2e.cjs "$(cygpath -w "$exe")" "$(cygpath -w "$RUNNER_TEMP/shots")"
+
+      - name: Publish
+        if: steps.nightly.outputs.skip != 'true' && (github.event_name == 'schedule' || inputs.publish)
+        env:
+          TAG: ${{ steps.nightly.outputs.tag }}
+          VERSION: ${{ steps.nightly.outputs.version }}
+          TRAY_SHA: ${{ steps.tray.outputs.sha }}
+        run: |
+          gh release create "$TAG" release-fork/T3-Code-*-x64.exe release-fork/T3-Code-*-x64.exe.blockmap release-fork/nightly.yml \
+            -R "$GITHUB_REPOSITORY" --target "$GITHUB_REF_NAME" --prerelease --latest=false \
+            --title "T3 Code Nightly $VERSION + tray" \
+            --notes "Upstream [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG) with the minimize to tray commit ($TRAY_SHA)."
+
+      - name: Remove old releases
+        if: steps.nightly.outputs.skip != 'true' && (github.event_name == 'schedule' || inputs.publish)
+        run: |
+          gh release list -R "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[10:][].tagName' | while read -r old; do
+            gh release delete "$old" -R "$GITHUB_REPOSITORY" --cleanup-tag --yes
+          done
+
+      - name: Keep screenshots from a failed run
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: failure-shots
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: ignore
