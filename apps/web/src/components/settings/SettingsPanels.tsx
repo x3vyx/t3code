@@ -40,6 +40,7 @@ import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../..
 import { AboutVersionTitle } from "./AboutVersionTitle";
 import { CliCommandSettingsRow } from "./CliCommandSettingsRow";
 import { CloseToTraySettingsRow } from "./CloseToTraySettingsRow";
+import { UsageLimitsUsedSettingsRow } from "./UsageLimitsUsedSettingsRow";
 import { MobileAppSettingsRow } from "./MobileAppSettingsRow";
 import {
   canCheckForUpdate,
@@ -632,6 +633,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.closeToTray !== DEFAULT_UNIFIED_SETTINGS.closeToTray
       ? ["Minimize to tray on close"]
       : []),
+    ...(settings.usageLimitsShowUsed !== DEFAULT_UNIFIED_SETTINGS.usageLimitsShowUsed
+      ? ["Show usage limits as used"]
+      : []),
     ...(isTextGenerationModelDirty ? [gt("Text generation model")] : []),
     ...(settings.threadTitleInstructions !== DEFAULT_UNIFIED_SETTINGS.threadTitleInstructions
       ? [gt("Thread title instructions")]
@@ -747,6 +751,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       confirmThreadUnpin: DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin,
       confirmQuit: DEFAULT_UNIFIED_SETTINGS.confirmQuit,
       closeToTray: DEFAULT_UNIFIED_SETTINGS.closeToTray,
+      usageLimitsShowUsed: DEFAULT_UNIFIED_SETTINGS.usageLimitsShowUsed,
       textGenerationModelSelection: DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
       threadTitleInstructions: DEFAULT_UNIFIED_SETTINGS.threadTitleInstructions,
       fontFamilySans: DEFAULT_UNIFIED_SETTINGS.fontFamilySans,
@@ -1119,6 +1124,7 @@ export function GeneralSettingsPanel() {
           />
         ) : null}
         <CloseToTraySettingsRow />
+        <UsageLimitsUsedSettingsRow />
       </SettingsSection>
 
       <SettingsSection id="display" title={gt("Display")}>
