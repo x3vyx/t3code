@@ -58,7 +58,6 @@ jobs:
           repository: ${{ env.UPSTREAM }}
           ref: ${{ steps.nightly.outputs.tag }}
           fetch-depth: 1
-          persist-credentials: false
           sparse-checkout: |
             /*
             !/.repos/
