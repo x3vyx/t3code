@@ -76,6 +76,9 @@ const killTree = (pid) => {
   } catch {}
 };
 
+const mainPage = (app) =>
+  until(async () => app.windows().find((w) => !w.url().startsWith("data:")), 30_000, "main page");
+
 async function launch() {
   const app = await _electron.launch({ executablePath: exe, env, timeout: 90_000 });
   const pid = app.process().pid;
@@ -98,7 +101,7 @@ async function main() {
       const hidden = await mainInfo(app);
       check("A2 X hides the window", hidden.visible === false);
       check("A3 app process survives the X", isAlive(pid));
-      const page = app.windows().find((w) => !w.url().startsWith("data:"));
+      const page = await mainPage(app);
       check("A4 renderer still alive while hidden", (await page.evaluate(() => 1 + 1)) === 2);
 
       const second = spawn(exe, [], { env, stdio: "ignore" });
@@ -121,7 +124,7 @@ async function main() {
   {
     const { app, pid, info } = await launch();
     try {
-      const page = app.windows().find((w) => !w.url().startsWith("data:"));
+      const page = await mainPage(app);
       await page.evaluate(() => {
         window.location.hash = "#/settings/general";
       });
