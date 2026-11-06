@@ -34,6 +34,7 @@ import * as Schema from "effect/Schema";
 import { APP_VERSION, HOSTED_APP_CHANNEL, HOSTED_APP_CHANNEL_LABEL } from "../../branding";
 import { AboutVersionTitle } from "./AboutVersionTitle";
 import { CliCommandSettingsRow } from "./CliCommandSettingsRow";
+import { CloseToTraySettingsRow } from "./CloseToTraySettingsRow";
 import { MobileAppSettingsRow } from "./MobileAppSettingsRow";
 import {
   canCheckForUpdate,
@@ -587,6 +588,9 @@ export function useSettingsRestore(onRestored?: () => void) {
       ? ["Delete confirmation"]
       : []),
     ...(settings.confirmQuit !== DEFAULT_UNIFIED_SETTINGS.confirmQuit ? ["Quit shortcut"] : []),
+    ...(settings.closeToTray !== DEFAULT_UNIFIED_SETTINGS.closeToTray
+      ? ["Minimize to tray on close"]
+      : []),
     ...(isTextGenerationModelDirty ? ["Text generation model"] : []),
     ...(settings.threadTitleInstructions !== DEFAULT_UNIFIED_SETTINGS.threadTitleInstructions
       ? ["Thread title instructions"]
@@ -699,6 +703,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       confirmThreadDelete: DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete,
       confirmThreadUnpin: DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin,
       confirmQuit: DEFAULT_UNIFIED_SETTINGS.confirmQuit,
+      closeToTray: DEFAULT_UNIFIED_SETTINGS.closeToTray,
       textGenerationModelSelection: DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
       threadTitleInstructions: DEFAULT_UNIFIED_SETTINGS.threadTitleInstructions,
       fontFamilySans: DEFAULT_UNIFIED_SETTINGS.fontFamilySans,
@@ -1053,6 +1058,7 @@ export function GeneralSettingsPanel() {
             }
           />
         ) : null}
+        <CloseToTraySettingsRow />
       </SettingsSection>
 
       <SettingsSection id="display" title={gt("Display")}>

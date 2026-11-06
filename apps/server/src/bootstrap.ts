@@ -83,7 +83,8 @@ export const readBootstrapEnvelope = Effect.fn("readBootstrapEnvelope")(function
 
   const stream = yield* makeBootstrapInputStream(fd);
 
-  const timeoutMs = options?.timeoutMs ?? 1000;
+  // A cold start can stall the loop for seconds; an expired timer then beats the pending pipe read.
+  const timeoutMs = options?.timeoutMs ?? 30_000;
 
   return yield* Effect.callback<
     Option.Option<A>,
