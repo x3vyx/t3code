@@ -70,7 +70,7 @@ import {
 } from "../../modelSelection";
 import { providerInstanceEntriesFor } from "../../providerInstances";
 import { ensureLocalApi, readLocalApi } from "../../localApi";
-import { isMacPlatform } from "../../lib/utils";
+import { isMacPlatform, isWindowsPlatform } from "../../lib/utils";
 import { useEnvironmentProviders, useEnvironments } from "../../state/environments";
 import { EMPTY_SERVER_PROVIDERS } from "../../state/server";
 import { Button } from "../ui/button";
@@ -565,6 +565,9 @@ export function useSettingsRestore(onRestored?: () => void) {
       ? ["Delete confirmation"]
       : []),
     ...(settings.confirmQuit !== DEFAULT_UNIFIED_SETTINGS.confirmQuit ? ["Quit shortcut"] : []),
+    ...(settings.closeToTray !== DEFAULT_UNIFIED_SETTINGS.closeToTray
+      ? ["Minimize to tray on close"]
+      : []),
     ...(isTextGenerationModelDirty ? ["Text generation model"] : []),
     ...(settings.threadTitleInstructions !== DEFAULT_UNIFIED_SETTINGS.threadTitleInstructions
       ? ["Thread title instructions"]
@@ -673,6 +676,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       confirmThreadDelete: DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete,
       confirmThreadUnpin: DEFAULT_UNIFIED_SETTINGS.confirmThreadUnpin,
       confirmQuit: DEFAULT_UNIFIED_SETTINGS.confirmQuit,
+      closeToTray: DEFAULT_UNIFIED_SETTINGS.closeToTray,
       textGenerationModelSelection: DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
       threadTitleInstructions: DEFAULT_UNIFIED_SETTINGS.threadTitleInstructions,
       fontFamilySans: DEFAULT_UNIFIED_SETTINGS.fontFamilySans,
@@ -1024,6 +1028,29 @@ export function GeneralSettingsPanel() {
                   ))}
                 </SelectPopup>
               </Select>
+            }
+          />
+        ) : null}
+        {isElectron && isWindowsPlatform(navigator.platform) ? (
+          <SettingsRow
+            {...searchableSetting("close-to-tray")}
+            description="Closing the window keeps T3 Code running in the system tray. Quit from the tray icon."
+            resetAction={
+              settings.closeToTray !== DEFAULT_UNIFIED_SETTINGS.closeToTray ? (
+                <SettingResetButton
+                  label="minimize to tray on close"
+                  onClick={() =>
+                    updateSettings({ closeToTray: DEFAULT_UNIFIED_SETTINGS.closeToTray })
+                  }
+                />
+              ) : null
+            }
+            control={
+              <Switch
+                checked={settings.closeToTray}
+                onCheckedChange={(checked) => updateSettings({ closeToTray: Boolean(checked) })}
+                aria-label="Minimize to tray on close"
+              />
             }
           />
         ) : null}

@@ -36,6 +36,7 @@ import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopClientSettings from "../settings/DesktopClientSettings.ts";
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as DesktopRendererHistory from "../telemetry/DesktopRendererHistory.ts";
+import { makeCloseToTrayHandler } from "./CloseToTray.ts";
 import { makeQuitShortcutHandler } from "./QuitHold.ts";
 import { copyContextMenuImage } from "./ContextMenuImage.ts";
 
@@ -703,6 +704,30 @@ export const make = Effect.gen(function* () {
     window.on("close", () => {
       runFork(flushBoundsPersist);
     });
+    if (environment.platform === "win32") {
+      const closeToTray = makeCloseToTrayHandler({
+        shouldHide: () =>
+          runPromise(
+            Effect.gen(function* () {
+              if (yield* Ref.get(desktopState.quitting)) return false;
+              if (!(yield* Ref.get(desktopState.trayActive))) return false;
+              return Option.match(yield* clientSettings.get, {
+                onNone: () => DEFAULT_CLIENT_SETTINGS.closeToTray,
+                onSome: (settings) => settings.closeToTray,
+              });
+            }),
+          ),
+        hide: () => {
+          if (!window.isDestroyed()) window.hide();
+        },
+        close: () => {
+          if (!window.isDestroyed()) window.close();
+        },
+      });
+      window.on("close", closeToTray.handleClose);
+      // Shutdown and logoff skip before-quit, so nothing else marks the app as quitting.
+      window.on("session-end", closeToTray.approveClose);
+    }
 
     if (environment.platform === "darwin") {
       // Mouse drivers can deliver Back/Forward as macOS swipe gestures instead of buttons.
