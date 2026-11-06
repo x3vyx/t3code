@@ -968,6 +968,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     windowsOnly: true,
   },
   {
+    id: "usage-limits-show-used",
+    // oxlint-disable-next-line t3code/no-untranslated-copy -- fork-only copy stays out of the translation files
+    title: "Show usage limits as used",
+    to: "/settings/general",
+    searchTerms: ["usage limits percent used left remaining session weekly quota"],
+  },
+  {
     id: "text-generation-model",
     title: msg("Text generation model"),
     to: "/settings/threads",

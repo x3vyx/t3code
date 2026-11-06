@@ -39,6 +39,7 @@ import {
   AlertDialogTitle,
 } from "../ui/alert-dialog";
 import { Button } from "../ui/button";
+import { useLimitDirection } from "./limitDirection";
 import { UsageLimitsPooled } from "./UsageLimitsPooled";
 import { formatResetsIn, resetCreditChoices } from "@t3tools/shared/usageLimitsCopy";
 import { PROVIDER_PRESENTATION } from "./usageProviders";
@@ -132,9 +133,11 @@ function WindowBar({
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const gt = useGT();
   const m = useMessages();
+  const direction = useLimitDirection();
   const remaining = remainingPercent(window);
+  const shown = direction.show(remaining);
   const timeLeft = paceRemainingPercent(window, now);
-  const [barRef, paceMark] = usePaceMark(timeLeft);
+  const [barRef, paceMark] = usePaceMark(timeLeft === null ? null : direction.show(timeLeft));
   const resetsIn = formatResetsIn(window, now, m);
   const resetsAt = window.resetsAt
     ? formatUpcomingTimestamp(window.resetsAt, timestampFormat, now, undefined, m)
@@ -173,9 +176,9 @@ function WindowBar({
         <>
           <div className="flex flex-col gap-0.5">
             <span className="text-foreground">
-              {timeLeft !== null
+              {timeLeft !== null && !direction.used
                 ? gt("{remaining}% left · {timeLeft}% of the window left", { remaining, timeLeft })
-                : gt("{remaining}% left", { remaining })}
+                : direction.percent(remaining, gt("{remaining}% left", { remaining }))}
             </span>
             {timeLeft !== null ? (
               <span className="text-muted-foreground">
@@ -196,10 +199,10 @@ function WindowBar({
       {/* Clip both layers so the gap exposes even a translucent composer surface. */}
       <div className="absolute inset-0" style={paceMark?.gap}>
         <div className="absolute inset-x-0 inset-y-1.5 rounded-full bg-muted" />
-        {remaining > 0 ? (
+        {shown > 0 ? (
           <div
             className="absolute inset-y-1.5 left-0 rounded-full"
-            style={{ width: `${remaining}%`, backgroundColor: color }}
+            style={{ width: `${shown}%`, backgroundColor: color }}
           />
         ) : null}
       </div>
@@ -230,6 +233,7 @@ export function LimitWindows({
   const color = normalizeProviderAccentColor(accentColor) ?? barColor(driver);
   const gt = useGT();
   const m = useMessages();
+  const direction = useLimitDirection();
   return (
     <div
       className={
@@ -246,7 +250,10 @@ export function LimitWindows({
             <span className="flex min-w-0 items-center gap-2 text-xs">
               <span className="truncate text-muted-foreground">{window.label}</span>
               <span className="ms-auto shrink-0 font-medium text-foreground tabular-nums">
-                {gt("{remaining}% left", { remaining: remainingPercent(window) })}
+                {direction.percent(
+                  remainingPercent(window),
+                  gt("{remaining}% left", { remaining: remainingPercent(window) }),
+                )}
               </span>
             </span>
             <WindowBar color={color} window={window} now={now} />

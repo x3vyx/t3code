@@ -38,6 +38,7 @@ import { Button } from "../ui/button";
 import { OpenAI } from "../Icons";
 import { Alert, AlertTitle } from "../ui/alert";
 import { Popover, PopoverCreateHandle, PopoverPopup, PopoverTrigger } from "../ui/popover";
+import { useLimitDirection } from "./limitDirection";
 import { PaceIcon, ResetCreditDialog, barColor, usePaceMark, useResetCredit } from "./UsageLimits";
 import {
   collectExternalUsageLinks,
@@ -152,6 +153,7 @@ function SegmentPopover({
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const gt = useGT();
   const m = useMessages();
+  const direction = useLimitDirection();
   const remaining = remainingPercent(window);
   const timeLeft = paceRemainingPercent(window, now);
   const resetsIn = formatResetsIn(window, now, m, "in");
@@ -199,7 +201,9 @@ function SegmentPopover({
         ) : null}
       </div>
       <div className="flex flex-col gap-1 border-t border-border/60 pt-2.5">
-        <Row label={gt("Left", { $context: "remaining usage" })}>{remaining}%</Row>
+        <Row label={direction.word(gt("Left", { $context: "remaining usage" }))}>
+          {direction.show(remaining)}%
+        </Row>
         {window.resetsAt ? (
           <Row label={gt("Resets", { $context: "when the usage window resets" })}>
             {formatUpcomingTimestamp(window.resetsAt, timestampFormat, now, undefined, m)}
@@ -207,7 +211,9 @@ function SegmentPopover({
           </Row>
         ) : null}
         {timeLeft !== null ? (
-          <Row label={gt("Even pace")}>{gt("{timeLeft}% left by now", { timeLeft })}</Row>
+          <Row label={gt("Even pace")}>
+            {direction.percent(timeLeft, gt("{timeLeft}% left by now", { timeLeft }))}
+          </Row>
         ) : null}
         {reset && reset.restoresPercent > 0 ? (
           <Row label={gt("Restores", { $context: "a reset credit restores part of the pool" })}>
@@ -368,9 +374,11 @@ function SegmentTriggers({
 }) {
   const popover = use(SegmentPopoverContext) ?? undefined;
   const payload: SegmentPayload = { account, window, reset, redeem };
+  const direction = useLimitDirection();
   const remaining = remainingPercent(window);
+  const shown = direction.show(remaining);
   const timeLeft = paceRemainingPercent(window, now);
-  const [segmentRef, paceMark] = usePaceMark(timeLeft);
+  const [segmentRef, paceMark] = usePaceMark(timeLeft === null ? null : direction.show(timeLeft));
   const m = useMessages();
   const resetsIn = formatResetsIn(window, now, m);
   const refillIn = formatResetsIn(window, now, m, "refill");
@@ -415,13 +423,15 @@ function SegmentTriggers({
             <div
               aria-hidden
               className="absolute inset-y-0 left-0 rounded-md opacity-35"
-              style={{ width: `${remaining}%`, backgroundColor: color }}
+              style={{ width: `${shown}%`, backgroundColor: color }}
             />
             {remaining < 100 && reset && refillPercent > 0 ? (
               <div
                 aria-hidden
                 className="absolute inset-y-0 right-0 opacity-20"
                 style={{
+                  // The refill is the tail of the used part, which ends where the fill does.
+                  ...(direction.used ? { right: `${remaining}%` } : {}),
                   width: `${Math.min(100 - remaining, refillPercent)}%`,
                   // A bare 45° gradient repeats every 5√2px, so some stripes rasterize thinner; a whole-pixel tile doesn't.
                   backgroundImage: `repeating-linear-gradient(135deg, transparent 0 1px, ${color} 1px 2px, transparent 2px 50%)`,
@@ -453,9 +463,7 @@ function SegmentTriggers({
           ) : null}
           {/* A single-account bar repeats the headline percentage. */}
           {showAccountName ? (
-            <span className="shrink-0 font-semibold text-foreground tabular-nums">
-              {remaining}%
-            </span>
+            <span className="shrink-0 font-semibold text-foreground tabular-nums">{shown}%</span>
           ) : null}
           {resetsIn || credits ? (
             <span className="ms-auto flex min-w-0 items-center gap-1.5 overflow-hidden rounded-sm bg-background/85 px-1.5 py-0.5 text-2xs whitespace-nowrap text-foreground tabular-nums">
@@ -495,7 +503,7 @@ function LegendRow({
 }) {
   const popover = use(SegmentPopoverContext) ?? undefined;
   const { account, window } = payload;
-  const remaining = remainingPercent(window);
+  const remaining = useLimitDirection().show(remainingPercent(window));
   const m = useMessages();
   const resetsIn = formatResetsIn(window, now, m, "refill");
   const credits = account.limits.resetCredits?.availableCount ?? 0;
@@ -608,6 +616,7 @@ function PoolWindowCard({
 }) {
   const m = useMessages();
   const nextRefill = pool.resets.find((reset) => reset.at > now && reset.restoresPercent > 0);
+  const direction = useLimitDirection();
   return (
     <div className="grid items-center gap-x-6 gap-y-3 rounded-lg border border-border/60 p-4 md:grid-cols-[11rem_minmax(0,1fr)]">
       <div className="flex flex-col gap-1">
@@ -616,12 +625,10 @@ function PoolWindowCard({
         ) : null}
         <span className="flex items-baseline gap-2">
           <span className="text-3xl font-semibold text-foreground tabular-nums">
-            {pool.remainingPercent}%
+            {direction.show(pool.remainingPercent)}%
           </span>
           <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-            <span>
-              <T context="remaining usage percentage">left</T>
-            </span>
+            <span>{direction.word(<T context="remaining usage percentage">left</T>)}</span>
             {pool.pace ? <PaceIcon pace={pool.pace} /> : null}
           </span>
         </span>

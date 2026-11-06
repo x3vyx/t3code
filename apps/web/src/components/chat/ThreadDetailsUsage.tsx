@@ -24,6 +24,7 @@ import { formatContextWindowTokens } from "../../lib/contextWindow";
 import { cn } from "../../lib/utils";
 import { formatUpcomingTimestamp } from "../../timestampFormat";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { useLimitDirection } from "../usage/limitDirection";
 import { formatContextWindowCompactionMessage } from "./compaction.logic";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 import {
@@ -195,22 +196,26 @@ function LimitRow({
   const m = useMessages();
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const left = remainingPercent(window);
+  const direction = useLimitDirection();
+  const shown = direction.show(left);
   const pace = paceOf(window, now);
   const timeLeft = paceRemainingPercent(window, now);
   const resetsAt = window.resetsAt ? Date.parse(window.resetsAt) : Number.NaN;
   return (
     <UsageRow
       label={window.label}
-      fill={left}
+      fill={shown}
       tone={limitTone(left)}
-      tick={timeLeft}
-      value={`${left}%`}
-      ariaValue={gt("{left}% left", { left })}
+      tick={timeLeft === null ? null : direction.show(timeLeft)}
+      value={`${shown}%`}
+      ariaValue={direction.percent(left, gt("{left}% left", { left }))}
       opensUsage
       tooltip={
         <>
           <span className="text-foreground">
-            {gt("{label}: {left}% left", { label: window.label, left })}
+            {direction.used
+              ? `${window.label}: ${direction.percent(left, "")}`
+              : gt("{label}: {left}% left", { label: window.label, left })}
           </span>
           {accountLabel ? <span className="text-muted-foreground">{accountLabel}</span> : null}
           {pace && timeLeft !== null ? (
