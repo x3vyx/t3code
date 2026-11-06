@@ -959,6 +959,15 @@ export const SETTINGS_SEARCH_ITEMS = [
     desktopOnly: true,
   },
   {
+    id: "close-to-tray",
+    // oxlint-disable-next-line t3code/no-untranslated-copy -- fork-only copy stays out of the translation files
+    title: "Minimize to tray on close",
+    to: "/settings/general",
+    searchTerms: ["system tray notification area background keep running close button x hide"],
+    desktopOnly: true,
+    windowsOnly: true,
+  },
+  {
     id: "text-generation-model",
     title: msg("Text generation model"),
     to: "/settings/threads",

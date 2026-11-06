@@ -35,6 +35,7 @@ import * as DesktopLifecycle from "./DesktopLifecycle.ts";
 import * as DesktopLinuxUrlHandler from "./DesktopLinuxUrlHandler.ts";
 import * as DesktopPreReadyPlatform from "./DesktopPreReadyPlatform.ts";
 import * as DesktopShutdown from "./DesktopShutdown.ts";
+import * as DesktopAssets from "./DesktopAssets.ts";
 import * as DesktopState from "./DesktopState.ts";
 import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
 import * as DesktopServerExposure from "../backend/DesktopServerExposure.ts";
@@ -169,6 +170,10 @@ const runStubbedDesktop = (stub: StubbedDesktop) =>
         Effect.provideService(DesktopState.DesktopState, {
           quitting,
         } as DesktopState.DesktopState["Service"]),
+        Effect.provideService(
+          DesktopAssets.DesktopAssets,
+          {} as DesktopAssets.DesktopAssets["Service"],
+        ),
         Effect.provideService(DesktopWindow.DesktopWindow, {
           ensureMain: stub
             .record("window")
