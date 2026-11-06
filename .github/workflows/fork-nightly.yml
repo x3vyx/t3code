@@ -117,8 +117,10 @@ jobs:
           T3CODE_DESKTOP_REUSE_RESOURCE_MONITOR: "true"
           T3CODE_DESKTOP_UPDATE_REPOSITORY: ${{ github.repository }}
           VERSION: ${{ steps.nightly.outputs.version }}
+        # Upstream cross-builds on Linux. A native Windows build lands a few files over its size guard.
         run: |
           cp .env.example .env
+          sed -i 's/WINDOWS_PACKAGED_PAYLOAD_FILE_LIMIT = 80;/WINDOWS_PACKAGED_PAYLOAD_FILE_LIMIT = 100;/' scripts/build-desktop-artifact.ts
           node scripts/build-desktop-artifact.ts --platform win --target nsis --arch x64 --build-version "$VERSION" --output-dir release-fork --keep-stage --verbose
 
       # Installs on this feed update themselves, so a build that fails here is never published.
@@ -130,6 +132,7 @@ jobs:
           tmp="$(node -p 'require("os").tmpdir()')"
           exe="$(find "$tmp" -maxdepth 6 -path '*/win-unpacked/T3 Code*.exe' | head -1)"
           [ -n "$exe" ] || { echo "Packaged app not found in $tmp." >&2; exit 1; }
+          (cd "$(dirname "$exe")" && find . -type f | sort | sed 's/^/payload: /')
           mkdir -p "$RUNNER_TEMP/shots"
           node .fork-automation/.github/scripts/tray-e2e.cjs "$(cygpath -w "$exe")" "$(cygpath -w "$RUNNER_TEMP/shots")"
 
