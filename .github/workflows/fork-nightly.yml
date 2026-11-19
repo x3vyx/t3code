@@ -10,6 +10,10 @@ on:
         description: Publish the release. Off builds and tests only.
         type: boolean
         default: true
+      force:
+        description: Build even when this nightly is already published here.
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -38,12 +42,14 @@ jobs:
 
       - name: Find the newest upstream nightly
         id: nightly
+        env:
+          FORCE: ${{ inputs.force }}
         run: |
           tag="$(gh api "repos/$UPSTREAM/releases?per_page=30" --jq '[.[] | select(.prerelease and (.draft | not) and (.tag_name | test("-nightly\\.")))][0].tag_name')"
           [ -n "$tag" ] || { echo "No upstream nightly found." >&2; exit 1; }
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
-          if gh release view "$tag" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+          if [ "$FORCE" != true ] && gh release view "$tag" -R "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "$tag is already published."
           else
@@ -70,15 +76,37 @@ jobs:
           path: .fork-automation
           persist-credentials: false
 
-      # The tray branch is one commit, so depth 2 brings the commit and its parent.
-      - name: Apply the tray commit
+      # The first fork commit is the tray and must apply. A later one that conflicts is left out,
+      # so one stale extra does not cost the day's build.
+      - name: Apply the fork commits
         id: tray
         if: steps.nightly.outputs.skip != 'true'
+        env:
+          TAG: ${{ steps.nightly.outputs.tag }}
         run: |
-          git fetch --depth=2 "https://github.com/$GITHUB_REPOSITORY.git" "$TRAY_BRANCH"
-          sha="$(git rev-parse FETCH_HEAD)"
-          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com cherry-pick "$sha"
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          count="$(gh api "repos/$GITHUB_REPOSITORY/compare/${UPSTREAM%%/*}:main...$TRAY_BRANCH" --jq '.ahead_by')"
+          [ "$count" -ge 1 ] && [ "$count" -le 10 ] || { echo "Expected 1 to 10 fork commits, found $count." >&2; exit 1; }
+          git fetch --depth=$((count + 1)) "https://github.com/$GITHUB_REPOSITORY.git" "$TRAY_BRANCH"
+          notes="$RUNNER_TEMP/fork-notes.md"
+          printf 'Upstream [%s](https://github.com/%s/releases/tag/%s) with these fork commits:\n\n' "$TAG" "$UPSTREAM" "$TAG" > "$notes"
+          first=true
+          partial=""
+          for sha in $(git rev-list --reverse -n "$count" FETCH_HEAD); do
+            subject="$(git log -1 --format=%s "$sha")"
+            if git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com cherry-pick "$sha"; then
+              echo "- $subject (${sha:0:10})" >> "$notes"
+            elif [ "$first" = true ]; then
+              echo "The tray commit does not apply on this nightly." >&2
+              exit 1
+            else
+              git cherry-pick --abort
+              echo "- LEFT OUT, did not apply: $subject (${sha:0:10})" >> "$notes"
+              echo "::warning::Left out of this build: $subject"
+              partial=" (partial)"
+            fi
+            first=false
+          done
+          echo "partial=$partial" >> "$GITHUB_OUTPUT"
 
       - name: Setup Vite+
         if: steps.nightly.outputs.skip != 'true'
@@ -141,12 +169,12 @@ jobs:
         env:
           TAG: ${{ steps.nightly.outputs.tag }}
           VERSION: ${{ steps.nightly.outputs.version }}
-          TRAY_SHA: ${{ steps.tray.outputs.sha }}
+          PARTIAL: ${{ steps.tray.outputs.partial }}
         run: |
           gh release create "$TAG" release-fork/T3-Code-*-x64.exe release-fork/T3-Code-*-x64.exe.blockmap release-fork/nightly.yml \
             -R "$GITHUB_REPOSITORY" --target "$GITHUB_REF_NAME" --prerelease --latest=false \
-            --title "T3 Code Nightly $VERSION + tray" \
-            --notes "Upstream [$TAG](https://github.com/$UPSTREAM/releases/tag/$TAG) with the minimize to tray commit ($TRAY_SHA)."
+            --title "T3 Code Nightly $VERSION + tray$PARTIAL" \
+            --notes-file "$RUNNER_TEMP/fork-notes.md"
 
       - name: Remove old releases
         if: steps.nightly.outputs.skip != 'true' && (github.event_name == 'schedule' || inputs.publish)
