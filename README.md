@@ -22,7 +22,7 @@ If the bearer-session error shows up on a build without the fix, quit from the t
 
 ## When the nightly fails or comes out partial
 
-The cause is a cherry-pick conflict because upstream touched a line next to one of the hooks. A failed run means the tray commit conflicted (`gh run view <id> -R x3vyx/t3code --log-failed`); a "(partial)" release names the commit that was left out. Either way, in a checkout of `feat/minimize-to-tray`:
+The usual cause is a cherry-pick conflict because upstream touched a line next to one of the hooks. A run that fails in a later step is a change in upstream's build instead: read the failed step first. A failed run means the tray commit conflicted (`gh run view <id> -R x3vyx/t3code --log-failed`); a "(partial)" release names the commit that was left out. Either way, in a checkout of `feat/minimize-to-tray`:
 
 ```sh
 git fetch upstream --tags
@@ -36,9 +36,11 @@ gh workflow run "Fork nightly" -R x3vyx/t3code --ref fork-automation
 
 The workflow skips a nightly tag that already has a release here. To replace a partial release, delete it first. To try a build without publishing, run with `-f force=true -f publish=false`.
 
-## State on 2026-11-19
+## State on 2026-11-27
 
-- Latest release: `v0.1.11-nightly.20261119.4941`. The branch was split into three commits that day (`59ddd68d69`, `0a9a076c25`, `b0e0bab846`); the single-commit version is the local branch `backup/tray-single-commit-1119`.
+- Latest release: `v0.1.14-nightly.20261127.5332`, with all three commits (`46a720b831`, `d6729d902d`, `66ca39ec1a`). The branch before that rebase is the local branch `backup/tray-pre-rebase-1127`.
+- No release came out from 2026-11-23 to 2026-11-26. The native Windows build passed the file-count guard the workflow had raised to 100 (now 150), and upstream fused off Node inspector flags in packaged builds (#43039), which Playwright needs to drive the app. The packaged-app test now runs on a copy of the app with that one fuse turned back on (`enable-inspect-fuse.cjs`); the published installer keeps it off.
+- `vp run check:changed` fails locally on Windows in `DesktopWindow.test.ts` (two upstream cases compare a POSIX preload path). It is unrelated to the fork.
 - The usage setting passed the component tests but was not checked by eye in the running app. With it on, the bar tooltip drops the "% of the window left" part and screen-reader labels still say how much is left.
 - The browser tests need Playwright's headless shell: `playwright install chromium-headless-shell` from `apps/web`.
 - Open: drop the bootstrap timeout change when upstream fixes #17367.
