@@ -145,10 +145,11 @@ jobs:
           T3CODE_DESKTOP_REUSE_RESOURCE_MONITOR: "true"
           T3CODE_DESKTOP_UPDATE_REPOSITORY: ${{ github.repository }}
           VERSION: ${{ steps.nightly.outputs.version }}
-        # Upstream cross-builds on Linux. A native Windows build lands a few files over its size guard.
+        # Upstream cross-builds on Linux. A native Windows build lands over its file-count guard (105 files on 2026-11-23).
         run: |
           cp .env.example .env
-          sed -i 's/WINDOWS_PACKAGED_PAYLOAD_FILE_LIMIT = 80;/WINDOWS_PACKAGED_PAYLOAD_FILE_LIMIT = 100;/' scripts/build-desktop-artifact.ts
+          sed -i -E 's/(WINDOWS_PACKAGED_PAYLOAD_FILE_LIMIT = )[0-9]+;/\1150;/' scripts/build-desktop-artifact.ts
+          grep -q 'WINDOWS_PACKAGED_PAYLOAD_FILE_LIMIT = 150;' scripts/build-desktop-artifact.ts
           node scripts/build-desktop-artifact.ts --platform win --target nsis --arch x64 --build-version "$VERSION" --output-dir release-fork --keep-stage --verbose
 
       # Installs on this feed update themselves, so a build that fails here is never published.
