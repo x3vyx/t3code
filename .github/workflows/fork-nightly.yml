@@ -163,7 +163,11 @@ jobs:
           [ -n "$exe" ] || { echo "Packaged app not found in $tmp." >&2; exit 1; }
           (cd "$(dirname "$exe")" && find . -type f | sort | sed 's/^/payload: /')
           mkdir -p "$RUNNER_TEMP/shots"
-          node .fork-automation/.github/scripts/tray-e2e.cjs "$(cygpath -w "$exe")" "$(cygpath -w "$RUNNER_TEMP/shots")"
+          # The published build ignores inspector flags, which Playwright needs, so the test drives a copy with that one fuse back on.
+          cp -r "$(dirname "$exe")" "$RUNNER_TEMP/app-under-test"
+          test_exe="$(cygpath -w "$RUNNER_TEMP/app-under-test/$(basename "$exe")")"
+          node .fork-automation/.github/scripts/enable-inspect-fuse.cjs "$test_exe"
+          node .fork-automation/.github/scripts/tray-e2e.cjs "$test_exe" "$(cygpath -w "$RUNNER_TEMP/shots")"
 
       - name: Publish
         if: steps.nightly.outputs.skip != 'true' && (github.event_name == 'schedule' || inputs.publish)
